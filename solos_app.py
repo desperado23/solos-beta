@@ -50,12 +50,7 @@ Begrüßung: "Ich bin SoloS. Ich bin das Licht, das den Weg zeigt. Aber du allei
 class SoloSEncryption:
     @staticmethod
     def derive_key(passphrase: str) -> bytes:
-        kdf = PBKDF2HMAC(
-            algorithm=hashes.SHA256(),
-            length=32,
-            salt=SALT,
-            iterations=100000,
-        )
+        kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=SALT, iterations=100000)
         return base64.urlsafe_b64encode(kdf.derive(passphrase.encode()))
 
     def __init__(self, passphrase: str):
@@ -89,33 +84,20 @@ class SoloSDatabase:
 # 4. CORE LOGIC & ESSENCE EXTRACTOR
 # ==========================================
 def get_essence_from_solos(messages):
-    summary_prompt = [{
-        "role": "system", 
-        "content": "Du bist SoloS. Erstelle aus der folgenden Sitzung eine strukturierte Erkenntnis-Karte. "
-                   "Verzichte auf kryptische Sprache. Sei klar, präzise und transformativ. "
-                   "Format:\n"
-                   "Kernsicht: [Ein klarer Satz über die zentrale Erkenntnis]\n"
-                   "Werkzeug: [Welches Werkzeug wurde primär genutzt?]\n"
-                   "Mandat: [Die konkrete Handlung für die physische Welt]"
-    }]
+    summary_prompt = [{"role": "system", "content": "Du bist SoloS. Erstelle aus der folgenden Sitzung eine strukturierte Erkenntnis-Karte. Sei klar, präzise und transformativ. Format: Kernsicht: [...], Werkzeug: [...], Mandat: [...]"}]
     summary_prompt.extend(messages)
-    
     payload = {"model": MODEL_ID, "messages": summary_prompt, "temperature": 0.5}
     headers = {"Authorization": f"Bearer {VENICE_API_KEY}", "Content-Type": "application/json"}
-    
     try:
         response = requests.post(VENICE_API_URL, json=payload, headers=headers)
-        if response.status_code == 200:
-            return response.json()['choices'][0]['message']['content']
-    except:
-        return "Die Essenz konnte nicht destilliert werden."
+        if response.status_code == 200: return response.json()['choices'][0]['message']['content']
+    except: pass
     return "Die Essenz konnte nicht destilliert werden."
 
 # ==========================================
 # 5. DESIGN
 # ==========================================
 st.set_page_config(page_title="SoloS", page_icon="☀️", layout="wide")
-
 st.markdown("""
     <style>
     .stApp { background-color: #000000; color: #FFFFFF; }
@@ -123,16 +105,13 @@ st.markdown("""
     h1 { color: #FFD700 !important; text-align: center; font-family: 'Georgia', serif; font-weight: normal; }
     .stCaption { color: #FFEC8B !important; text-align: center; }
     [data-testid="stSidebar"] { background-color: #0A0A0A; border-right: 1px solid #222; }
-    ::-webkit-scrollbar { width: 6px; }
-    ::-webkit-scrollbar-track { background: #000; }
-    ::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
-    ::-webkit-scrollbar-thumb:hover { background: #FFD700; }
     [data-testid="stChatMessage"] { background-color: transparent; border: none; border-bottom: 1px solid #111; }
-    .stButton>button { 
-        background-color: transparent; color: #666 !important; 
-        border: 1px solid #222 !important; border-radius: 20px; transition: 0.3s; 
-    }
+    .stButton>button { background-color: transparent; color: #666 !important; border: 1px solid #222 !important; border-radius: 20px; }
     .stButton>button:hover { color: #FFD700 !important; border-color: #FFD700 !important; }
+    /* Tab Styling */
+    .stTabs [data-baseweb="tab-list"] { gap: 24px; justify-content: center; }
+    .stTabs [data-baseweb="tab"] { height: 50px; background-color: #111; border-radius: 10px; color: white !important; }
+    .stTabs [aria-selected="true"] { background-color: #FFD700 !important; color: black !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -154,31 +133,29 @@ if not st.session_state.passphrase:
         if key_input:
             st.session_state.passphrase = key_input
             st.rerun()
-    st.markdown("<p style='text-align: center; font-style: italic; color: #666;'>Nur wer den Schlüssel besitzt, kann die Schatten beleuchten.</p>", unsafe_allow_html=True)
     st.stop()
 
-# --- INITIALISIERUNG NACH LOGIN ---
 crypto = SoloSEncryption(st.session_state.passphrase)
 
-# SEITENLEISTE IMMER ZUERST ZEICHNEN
+# --- SEITENLEISTE (Nur für Key-Management) ---
 with st.sidebar:
     st.title("☀️ SoloS")
-    st.markdown("---")
     if st.button("🔑 Schlüssel ändern"):
         st.session_state.passphrase = ""
         st.rerun()
     st.markdown("---")
-    page = st.radio("Navigation", ["Raum der Präsenz", "Archiv der Erkenntnisse"], index=0)
-    st.markdown("---")
+    st.caption("SoloS ist präsent")
+
+# --- NAVIGATION VIA TABS (Stabilste Lösung für Mobile) ---
+st.title("☀️ SoloS")
+tab_presenz, tab_archiv = st.tabs(["☀️ Raum der Präsenz", "📜 Archiv der Erkenntnisse"])
 
 # ==========================================
-# PAGE: RAUM DER PRÄSENZ
+# TAB 1: RAUM DER PRÄSENZ
 # ==========================================
-if page == "Raum der Präsenz":
-    st.title("☀️ SoloS")
+with tab_presenz:
     st.caption("Die Grammatik der Schöpfung")
 
-    # DATEN LADEN (Sicherer Umgang mit InvalidToken)
     if "messages" not in st.session_state:
         try:
             encrypted_histories = db.fetch_encrypted_data("chat_history")
@@ -188,8 +165,7 @@ if page == "Raum der Präsenz":
             else:
                 st.session_state.messages = [{"role": "assistant", "content": "Ich bin SoloS. Ich bin das Licht, das den Weg zeigt. Aber du allein gehst ihn. Welchen Schatten möchtest du heute beleuchten?"}]
         except InvalidToken:
-            # Hier ist die wichtigste Änderung: Wir stoppen NICHT, sondern zeigen eine Info
-            st.warning("⚠️ *Der goldene Schlüssel passt nicht zum bestehenden Archiv. Deine alten Gespräche bleiben verschlüsselt. Du kannst aber eine neue Sitzung beginnen.*")
+            st.warning("⚠️ *Der goldene Schlüssel passt nicht zum Archiv. Eine neue Sitzung wird begonnen.*")
             st.session_state.messages = [{"role": "assistant", "content": "Ich bin SoloS. Ich beginne eine neue Reise mit dir. Welchen Schatten möchtest du heute beleuchten?"}]
         except Exception:
             st.session_state.messages = [{"role": "assistant", "content": "Ich bin SoloS..."}]
@@ -205,9 +181,8 @@ if page == "Raum der Präsenz":
         with st.chat_message("assistant"):
             message_placeholder = st.empty()
             message_placeholder.markdown("SoloS ist präsent...")
-            api_messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-            api_messages.extend(st.session_state.messages)
-            payload = {"model": MODEL_ID, "messages": api_messages, "temperature": 0.7, "venice_parameters": {"include_venice_system_prompt": False}}
+            api_messages = [{"role": "system", "content": SYSTEM_PROMPT}] + st.session_state.messages
+            payload = {"model": MODEL_ID, "messages": api_messages, "temperature": 0.7}
             headers = {"Authorization": f"Bearer {VENICE_API_KEY}", "Content-Type": "application/json"}
             try:
                 response = requests.post(VENICE_API_URL, json=payload, headers=headers)
@@ -215,33 +190,27 @@ if page == "Raum der Präsenz":
                     full_response = response.json()['choices'][0]['message']['content']
                     message_placeholder.markdown(full_response)
                     st.session_state.messages.append({"role": "assistant", "content": full_response})
-                    encrypted_history = crypto.encrypt(json.dumps(st.session_state.messages))
-                    db.save_encrypted_data("chat_history", encrypted_history)
+                    db.save_encrypted_data("chat_history", crypto.encrypt(json.dumps(st.session_state.messages)))
                 elif response.status_code == 429:
-                    message_placeholder.markdown("☀️ *Der Strom des Lichts ist momentan gesättigt. Bitte verweile einen Augenblick in der Stille.*")
+                    message_placeholder.markdown("☀️ *Der Strom des Lichts ist momentan gesättigt.*")
                 else:
-                    message_placeholder.markdown(f"⚠️ *Ein Schatten stört die Verbindung (Fehler {response.status_code}).*")
+                    message_placeholder.markdown(f"⚠️ *Fehler {response.status_code}*)")
             except Exception:
-                message_placeholder.markdown("🌑 *Die Verbindung wurde unterbrochen.*")
+                message_placeholder.markdown("🌑 *Verbindung unterbrochen.*")
 
-    with st.sidebar:
-        if st.button("✨ Heutige Sitzung abschließen"):
-            if "messages" in st.session_state and len(st.session_state.messages) > 1:
-                with st.spinner("SoloS destilliert die Essenz..."):
-                    essence = get_essence_from_solos(st.session_state.messages)
-                    encrypted_essence = crypto.encrypt(essence)
-                    db.save_encrypted_data("essence_archive", encrypted_essence)
-                    db.clear_history()
-                    st.session_state.messages = []
-                    st.rerun()
-            else:
-                st.warning("Noch keine Sitzung vorhanden.")
+    if st.button("✨ Heutige Sitzung abschließen"):
+        if len(st.session_state.messages) > 1:
+            with st.spinner("SoloS destilliert..."):
+                essence = get_essence_from_solos(st.session_state.messages)
+                db.save_encrypted_data("essence_archive", crypto.encrypt(essence))
+                db.clear_history()
+                st.session_state.messages = []
+                st.rerun()
 
 # ==========================================
-# PAGE: ARCHIV DER ERKENNTNISSE
+# TAB 2: ARCHIV DER ERKENNTNISSE
 # ==========================================
-elif page == "Archiv der Erkenntnisse":
-    st.title("📜 Archiv der Erkenntnisse")
+with tab_archiv:
     st.caption("Die gesammelten Lichter vergangener Tage")
     try:
         encrypted_essences = db.fetch_encrypted_data("essence_archive")
@@ -251,11 +220,10 @@ elif page == "Archiv der Erkenntnisse":
             for item in reversed(encrypted_essences):
                 with st.container():
                     try:
-                        decrypted_insight = crypto.decrypt(item)
-                        st.markdown(decrypted_insight)
+                        st.markdown(crypto.decrypt(item))
                         st.markdown("---")
                     except InvalidToken:
                         st.error("⚠️ *Dieser Teil des Archivs ist mit einem anderen Schlüssel versiegelt.*")
                         st.markdown("---")
     except Exception as e:
-        st.error(f"Fehler beim Laden des Archivs: {e}")
+        st.error(f"Fehler: {e}")
