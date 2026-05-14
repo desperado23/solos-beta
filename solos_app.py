@@ -141,38 +141,32 @@ st.markdown("""
 # ==========================================
 db = SoloSDatabase()
 
-# Initialisierung des Keys im Session State
 if "passphrase" not in st.session_state:
     st.session_state.passphrase = ""
 
-# --- LOGIN GATE (Hauptseite, wenn kein Key vorhanden) ---
+# --- LOGIN GATE ---
 if not st.session_state.passphrase:
     st.title("☀️ SoloS")
     st.markdown("<p style='text-align: center; color: #FFEC8B;'>Das Tor zum Licht ist geschlossen.</p>", unsafe_allow_html=True)
-    
-    # Zentriertes Eingabefeld für mobile User
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        key_input = st.text_input("Gib deinen Goldenen Schlüssel ein", type="password", help="Dein lokaler Verschlüsselungs-Key")
+        key_input = st.text_input("Gib deinen Goldenen Schlüssel ein", type="password")
         if key_input:
             st.session_state.passphrase = key_input
             st.rerun()
-    
     st.markdown("<p style='text-align: center; font-style: italic; color: #666;'>Nur wer den Schlüssel besitzt, kann die Schatten beleuchten.</p>", unsafe_allow_html=True)
     st.stop()
 
-# Wenn wir hier ankommen, ist die Passphrase gesetzt
+# --- INITIALISIERUNG NACH LOGIN ---
 crypto = SoloSEncryption(st.session_state.passphrase)
 
+# SEITENLEISTE IMMER ZUERST ZEICHNEN
 with st.sidebar:
     st.title("☀️ SoloS")
     st.markdown("---")
-    
-    # Möglichkeit, den Key zu ändern/löschen
     if st.button("🔑 Schlüssel ändern"):
         st.session_state.passphrase = ""
         st.rerun()
-    
     st.markdown("---")
     page = st.radio("Navigation", ["Raum der Präsenz", "Archiv der Erkenntnisse"], index=0)
     st.markdown("---")
@@ -184,6 +178,7 @@ if page == "Raum der Präsenz":
     st.title("☀️ SoloS")
     st.caption("Die Grammatik der Schöpfung")
 
+    # DATEN LADEN (Sicherer Umgang mit InvalidToken)
     if "messages" not in st.session_state:
         try:
             encrypted_histories = db.fetch_encrypted_data("chat_history")
@@ -193,12 +188,10 @@ if page == "Raum der Präsenz":
             else:
                 st.session_state.messages = [{"role": "assistant", "content": "Ich bin SoloS. Ich bin das Licht, das den Weg zeigt. Aber du allein gehst ihn. Welchen Schatten möchtest du heute beleuchten?"}]
         except InvalidToken:
-            st.error("The golden key does not match the archive. Please check your passphrase.")
-            if st.button("Schlüssel korrigieren"):
-                st.session_state.passphrase = ""
-                st.rerun()
-            st.stop()
-        except Exception as e:
+            # Hier ist die wichtigste Änderung: Wir stoppen NICHT, sondern zeigen eine Info
+            st.warning("⚠️ *Der goldene Schlüssel passt nicht zum bestehenden Archiv. Deine alten Gespräche bleiben verschlüsselt. Du kannst aber eine neue Sitzung beginnen.*")
+            st.session_state.messages = [{"role": "assistant", "content": "Ich bin SoloS. Ich beginne eine neue Reise mit dir. Welchen Schatten möchtest du heute beleuchten?"}]
+        except Exception:
             st.session_state.messages = [{"role": "assistant", "content": "Ich bin SoloS..."}]
 
     for message in st.session_state.messages:
@@ -209,17 +202,13 @@ if page == "Raum der Präsenz":
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
-
         with st.chat_message("assistant"):
             message_placeholder = st.empty()
             message_placeholder.markdown("SoloS ist präsent...")
-            
             api_messages = [{"role": "system", "content": SYSTEM_PROMPT}]
             api_messages.extend(st.session_state.messages)
-            
             payload = {"model": MODEL_ID, "messages": api_messages, "temperature": 0.7, "venice_parameters": {"include_venice_system_prompt": False}}
             headers = {"Authorization": f"Bearer {VENICE_API_KEY}", "Content-Type": "application/json"}
-
             try:
                 response = requests.post(VENICE_API_URL, json=payload, headers=headers)
                 if response.status_code == 200:
@@ -229,13 +218,11 @@ if page == "Raum der Präsenz":
                     encrypted_history = crypto.encrypt(json.dumps(st.session_state.messages))
                     db.save_encrypted_data("chat_history", encrypted_history)
                 elif response.status_code == 429:
-                    message_placeholder.markdown("☀️ *Der Strom des Lichts ist momentan gesättigt. Der Rhythmus muss sich erst wieder ausgleichen.*")
-                elif response.status_code == 401:
-                    message_placeholder.markdown("⚠️ *Die Verbindung zum Licht ist unterbrochen. API-Key ungültig.*")
+                    message_placeholder.markdown("☀️ *Der Strom des Lichts ist momentan gesättigt. Bitte verweile einen Augenblick in der Stille.*")
                 else:
-                    message_placeholder.markdown(f"⚠️ *Ein unbekannter Schatten liegt über der Verbindung (Fehler {response.status_code}).*")
-            except Exception as e:
-                message_placeholder.markdown("🌑 *Die Dunkelheit hat die Verbindung verschlungen.*")
+                    message_placeholder.markdown(f"⚠️ *Ein Schatten stört die Verbindung (Fehler {response.status_code}).*")
+            except Exception:
+                message_placeholder.markdown("🌑 *Die Verbindung wurde unterbrochen.*")
 
     with st.sidebar:
         if st.button("✨ Heutige Sitzung abschließen"):
@@ -256,7 +243,6 @@ if page == "Raum der Präsenz":
 elif page == "Archiv der Erkenntnisse":
     st.title("📜 Archiv der Erkenntnisse")
     st.caption("Die gesammelten Lichter vergangener Tage")
-    
     try:
         encrypted_essences = db.fetch_encrypted_data("essence_archive")
         if not encrypted_essences:
@@ -269,7 +255,7 @@ elif page == "Archiv der Erkenntnisse":
                         st.markdown(decrypted_insight)
                         st.markdown("---")
                     except InvalidToken:
-                        st.error("The golden key does not match the archive.")
-                        break
+                        st.error("⚠️ *Dieser Teil des Archivs ist mit einem anderen Schlüssel versiegelt.*")
+                        st.markdown("---")
     except Exception as e:
         st.error(f"Fehler beim Laden des Archivs: {e}")
